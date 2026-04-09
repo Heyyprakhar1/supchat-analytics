@@ -74,7 +74,7 @@ services:
     networks:
       - supachat-network
 
-  # OLLAMA - FREE AI SERVICE (ADD THIS!)
+  # OLLAMA - FREE AI SERVICE
   ollama:
     image: ollama/ollama:latest
     container_name: supachat-ollama
@@ -89,6 +89,96 @@ services:
       timeout: 10s
       retries: 5
 
+  # MONITORING STACK
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: supachat-prometheus
+    restart: unless-stopped
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - supachat-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: supachat-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_INSTALL_PLUGINS=grafana-clock-panel
+    volumes:
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    networks:
+      - supachat-network
+
+  loki:
+    image: grafana/loki:latest
+    container_name: supachat-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ../monitoring/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    networks:
+      - supachat-network
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: supachat-promtail
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ../monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
+    networks:
+      - supachat-network
+    command: -config.file=/etc/promtail/config.yml
+
+    # Node Exporter (System metrics - CPU, Memory, Disk)
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: supachat-node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+    networks:
+      - supachat-network
+
+  # cAdvisor (Docker container metrics)
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: supachat-cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /cgroup:/cgroup:ro
+    ports:
+      - "9323:8080"
+    networks:
+      - supachat-network
+
+
 networks:
   supachat-network:
     driver: bridge
@@ -96,4 +186,7 @@ networks:
 volumes:
   postgres-data:
   ollama-data:
+  prometheus-data:
+  grafana-data:
+  loki-data:
 
