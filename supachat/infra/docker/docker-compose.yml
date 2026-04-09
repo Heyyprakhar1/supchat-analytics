@@ -52,14 +52,14 @@ services:
     container_name: supachat-web
     restart: unless-stopped
     environment:
-      - NEXT_PUBLIC_API_URL=http://api:8000
+      - NEXT_PUBLIC_API_URL=http://localhost
     depends_on:
       api:
         condition: service_healthy
     networks:
       - supachat-network
 
-  # Reverse Proxy
+  # Nginx Reverse Proxy
   nginx:
     image: nginx:alpine
     container_name: supachat-nginx
@@ -74,10 +74,26 @@ services:
     networks:
       - supachat-network
 
+  # OLLAMA - FREE AI SERVICE (ADD THIS!)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: supachat-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - supachat-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
 networks:
   supachat-network:
     driver: bridge
 
 volumes:
   postgres-data:
+  ollama-data:
 

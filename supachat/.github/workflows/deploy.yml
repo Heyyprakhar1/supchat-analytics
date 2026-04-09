@@ -1,0 +1,91 @@
+name: Deploy SupaChat
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+    - name: Build and push API
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./infra/docker/Dockerfile.api
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api:${{ github.sha }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build and push Web
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./infra/docker/Dockerfile.web
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:${{ github.sha }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          cd /opt/supachat
+          
+          # Pull latest images
+          docker-compose pull
+          
+          # Zero-downtime deployment
+          docker-compose up -d --no-deps --scale api=2 api
+          sleep 10
+          docker-compose up -d --no-deps --scale api=1 api
+          
+          # Update web
+          docker-compose up -d --no-deps web
+          
+          # Cleanup
+          docker system prune -f
+          
+          # Verify deployment
+          curl -f http://localhost/api/health || exit 1
+
