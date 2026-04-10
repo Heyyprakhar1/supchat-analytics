@@ -21,34 +21,34 @@ jobs:
       - name: Run Hadolint (API)
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: infra/docker/Dockerfile.api
+          dockerfile: supachat/infra/docker/Dockerfile.api  # fix 1: added supachat/ prefix
 
       - name: Run Hadolint (WEB)
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: infra/docker/Dockerfile.web
+          dockerfile: supachat/infra/docker/Dockerfile.web   # fix 1: added supachat/ prefix
 
       - name: Login to DockerHub
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
       - name: Build API Image
-        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/supchat-api:latest -f infra/docker/Dockerfile.api .
+        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/supchat-api:${{ github.sha }} -t ${{ secrets.DOCKER_USERNAME }}/supchat-api:latest -f supachat/infra/docker/Dockerfile.api supachat/  # fix 2+5: path + SHA tag + context
 
       - name: Build Web Image
-        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/supchat-web:latest -f infra/docker/Dockerfile.web .
+        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/supchat-web:${{ github.sha }} -t ${{ secrets.DOCKER_USERNAME }}/supchat-web:latest -f supachat/infra/docker/Dockerfile.web supachat/   # fix 2+5: path + SHA tag + context
 
       - name: Scan API Image
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0  # fix 4: pinned version
         with:
-          image-ref: ${{ secrets.DOCKER_USERNAME }}/supchat-api:latest
+          image-ref: docker.io/${{ secrets.DOCKER_USERNAME }}/supchat-api:latest  # fix 3: explicit registry
           format: table
           exit-code: '1'
           severity: CRITICAL,HIGH
 
       - name: Scan Web Image
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0  # fix 4: pinned version
         with:
-          image-ref: ${{ secrets.DOCKER_USERNAME }}/supchat-web:latest
+          image-ref: docker.io/${{ secrets.DOCKER_USERNAME }}/supchat-web:latest  # fix 3: explicit registry
           format: table
           exit-code: '1'
           severity: CRITICAL,HIGH
@@ -56,7 +56,9 @@ jobs:
       - name: Push Images
         run: |
           docker push ${{ secrets.DOCKER_USERNAME }}/supchat-api:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/supchat-api:${{ github.sha }}  # fix 5: push SHA tag too
           docker push ${{ secrets.DOCKER_USERNAME }}/supchat-web:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/supchat-web:${{ github.sha }}  # fix 5: push SHA tag too
 
   deploy:
     needs: security-and-build
@@ -69,7 +71,7 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd /opt/Supchat/supachat
+            cd /opt/Supchat/supachat || { echo "Deploy dir not found"; exit 1; }  # fix 7: error handling
             docker compose pull
             docker compose up -d --remove-orphans
 
