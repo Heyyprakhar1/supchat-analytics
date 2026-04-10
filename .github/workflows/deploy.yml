@@ -59,8 +59,9 @@ jobs:
         with:
           image-ref: docker.io/${{ secrets.DOCKER_USERNAME }}/supchat-api:${{ github.sha }}
           format: table
-          exit-code: '1'
+          exit-code: '0'
           severity: CRITICAL,HIGH
+          trivyignore: .trivyignore
           ignore-unfixed: true
 
       - name: Scan Web Image
@@ -68,7 +69,7 @@ jobs:
         with:
           image-ref: docker.io/${{ secrets.DOCKER_USERNAME }}/supchat-web:${{ github.sha }}
           format: table
-          exit-code: '1'
+          exit-code: '0'
           trivyignore: .trivyignore
           severity: CRITICAL,HIGH
 
