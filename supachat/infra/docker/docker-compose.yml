@@ -19,6 +19,14 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   api:
     image: heyyprakhar1/supchat-api:latest
@@ -26,6 +34,8 @@ services:
     restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql://supachat:password123@db:5432/supachat_test
+      - MCP_SERVER_COMMAND=npx
+      - MCP_SERVER_ARGS=-y @modelcontextprotocol/server-postgres
     depends_on:
       db:
         condition: service_healthy
@@ -37,6 +47,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   web:
     image: heyyprakhar1/supchat-web:latest
@@ -49,6 +67,14 @@ services:
         condition: service_healthy
     networks:
       - supachat-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   nginx:
     image: nginx:alpine
@@ -63,6 +89,36 @@ services:
       - api
     networks:
       - supachat-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: supachat-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - supachat-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
 
   prometheus:
     image: prom/prometheus:latest
@@ -75,6 +131,14 @@ services:
       - "9090:9090"
     networks:
       - supachat-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
 
   grafana:
     image: grafana/grafana:latest
@@ -90,6 +154,14 @@ services:
       - "3001:3000"
     networks:
       - supachat-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
 
   loki:
     image: grafana/loki:latest
@@ -102,6 +174,14 @@ services:
       - loki-data:/loki
     networks:
       - supachat-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
 
   promtail:
     image: grafana/promtail:latest
@@ -113,6 +193,14 @@ services:
     networks:
       - supachat-network
     command: -config.file=/etc/promtail/config.yml
+    deploy:
+      resources:
+        limits:
+          cpus: '0.10'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
 
   node-exporter:
     image: prom/node-exporter:latest
@@ -131,6 +219,14 @@ services:
       - "9100:9100"
     networks:
       - supachat-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.10'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
@@ -149,6 +245,14 @@ services:
       - "9323:8080"
     networks:
       - supachat-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
 
 networks:
   supachat-network:
