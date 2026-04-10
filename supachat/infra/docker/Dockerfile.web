@@ -2,7 +2,7 @@ FROM node:20-bookworm-slim AS base
 
 FROM base AS deps
 # hadolint ignore=DL3018
-RUN apt-get update && apt-get install -y libc6
+RUN apt-get update && apt-get install -y --no-install-recommends libc6 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY apps/web/package*.json ./
 RUN npm install
