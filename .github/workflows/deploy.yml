@@ -65,9 +65,10 @@ jobs:
       - name: Scan Web Image
         uses: aquasecurity/trivy-action@v0.35.0
         with:
-          image-ref: ${{ secrets.DOCKER_USERNAME }}/supchat-web:${{ github.sha }}
+          image-ref: docker.io/${{ secrets.DOCKER_USERNAME }}/supchat-web:${{ github.sha }}
           format: table
           exit-code: '1'
+          ignorefile: .trivyignore
           severity: CRITICAL,HIGH
 
       # ── Push Images ────────────────────────────────────────────────
