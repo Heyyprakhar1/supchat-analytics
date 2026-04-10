@@ -9,15 +9,18 @@ on:
 jobs:
   security-and-build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
+      # ── Secret Scanning ────────────────────────────────────────────
       - name: Run Gitleaks
         run: |
           curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar -xz
           ./gitleaks detect --source . --verbose --no-git --config .gitleaks.toml
 
+      # ── Dockerfile Linting ─────────────────────────────────────────
       - name: Run Hadolint (API)
         uses: hadolint/hadolint-action@v3.1.0
         with:
@@ -28,9 +31,11 @@ jobs:
         with:
           dockerfile: supachat/infra/docker/Dockerfile.web
 
+      # ── Docker Login ───────────────────────────────────────────────
       - name: Login to DockerHub
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
+      # ── Build Images ───────────────────────────────────────────────
       - name: Build API Image
         run: |
           docker build \
@@ -47,22 +52,24 @@ jobs:
             -f supachat/infra/docker/Dockerfile.web \
             supachat/
 
+      # ── Vulnerability Scanning (local images) ──────────────────────
       - name: Scan API Image
         uses: aquasecurity/trivy-action@v0.35.0
         with:
-          image-ref: docker.io/${{ secrets.DOCKER_USERNAME }}/supchat-api:latest
+          image-ref: ${{ secrets.DOCKER_USERNAME }}/supchat-api:${{ github.sha }}
           format: table
-          exit-code: '0'
+          exit-code: '1'
           severity: CRITICAL,HIGH
 
       - name: Scan Web Image
         uses: aquasecurity/trivy-action@v0.35.0
         with:
-          image-ref: docker.io/${{ secrets.DOCKER_USERNAME }}/supchat-web:latest
+          image-ref: ${{ secrets.DOCKER_USERNAME }}/supchat-web:${{ github.sha }}
           format: table
-          exit-code: '0'
+          exit-code: '1'
           severity: CRITICAL,HIGH
 
+      # ── Push Images ────────────────────────────────────────────────
       - name: Push Images
         run: |
           docker push ${{ secrets.DOCKER_USERNAME }}/supchat-api:latest
@@ -70,17 +77,23 @@ jobs:
           docker push ${{ secrets.DOCKER_USERNAME }}/supchat-web:latest
           docker push ${{ secrets.DOCKER_USERNAME }}/supchat-web:${{ github.sha }}
 
-  deploy:
-    needs: security-and-build
-    runs-on: ubuntu-latest
-    steps:
+      # ── Cleanup ────────────────────────────────────────────────────
+      - name: Docker Logout
+        if: always()
+        run: docker logout
+
+      # ── Deploy to EC2 ──────────────────────────────────────────────
       - name: Deploy to EC2
-        uses: appleboy/ssh-action@v0.1.6
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd /opt/Supchat/supachat/infra/docker || { echo "Deploy dir not found"; exit 1; }
+            cd /opt/Supchat/supachat
+            echo "📥 Pulling latest code..."
+            git pull origin main
+            echo "🐳 Deploying containers..."
+            cd infra/docker
             docker compose pull
             docker compose up -d --remove-orphans
